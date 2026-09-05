@@ -5,6 +5,7 @@ directly to Windows physical drives via the win32 API.
 """
 from __future__ import annotations
 
+import ctypes
 import queue
 import json
 import sys
@@ -16,13 +17,13 @@ import customtkinter as ctk
 
 from core import diskutil, flasher
 from core.bmap import BmapError
-from core.diskutil import DiskInfo, human_size
+from core.diskutil import DiskError, DiskInfo, human_size
 from core.flasher import FlashCancelled, FlashError, FlashProgress
 
 APP_NAME = "Bmap Imager"
 APP_AUTHOR = "created by ASiKS-Engineering"
-WINDOW_SIZE = "820x570"
-WINDOW_MIN_SIZE = (760, 540)
+WINDOW_SIZE = "820x550"
+WINDOW_MIN_SIZE = (760, 520)
 
 
 def _read_app_version() -> str:
@@ -66,6 +67,16 @@ LANGUAGE = "de"
 def tr(key: str, **values) -> str:
     text = TRANSLATIONS.get(LANGUAGE, TRANSLATIONS.get("de", {})).get(key, key)
     return text.format(**values)
+
+
+def _has_admin_rights() -> bool:
+    if sys.platform != "win32":
+        return True
+
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
 
 COLOR_ACCENT = "#1f6aa5"
 COLOR_DANGER = "#a83232"
@@ -237,6 +248,11 @@ class BmapFlashApp(ctk.CTk):
         self.appearance_mode = "dark"
         self._build_ui()
         self.after(100, self._poll_queue)
+        self.after(150, self._check_admin_rights)
+
+    def _check_admin_rights(self) -> None:
+        if not _has_admin_rights():
+            messagebox.showwarning(APP_NAME, tr("admin_warning"), parent=self)
 
     # ------------------------------------------------------------------
     # UI
@@ -278,10 +294,6 @@ class BmapFlashApp(ctk.CTk):
             header, text=APP_NAME, font=ctk.CTkFont(size=26, weight="bold")
         ).grid(row=0, column=0, sticky="w")
 
-        ctk.CTkLabel(header, text=f"v{APP_VERSION}", text_color=COLOR_MUTED).grid(
-            row=0, column=1, padx=(12, 16), sticky="e"
-        )
-
         settings = ctk.CTkFrame(header, fg_color="transparent")
         settings.grid(row=0, column=2, sticky="e")
         ctk.CTkLabel(
@@ -319,8 +331,8 @@ class BmapFlashApp(ctk.CTk):
 
     def _build_chooser_row(self) -> None:
         chooser = ctk.CTkFrame(self, fg_color="transparent")
-        chooser.grid(row=1, column=0, padx=24, pady=(12, 6), sticky="ew")
-        chooser.grid_columnconfigure((0, 2), weight=1)
+        chooser.grid(row=1, column=0, padx=24, pady=(12, 0), sticky="ew")
+        chooser.grid_columnconfigure((0, 2), weight=1, uniform="cards")
 
         self._build_image_card(chooser, 0)
 
@@ -328,12 +340,42 @@ class BmapFlashApp(ctk.CTk):
             chooser, text="→", font=ctk.CTkFont(size=24), text_color=COLOR_MUTED
         ).grid(row=0, column=1, padx=10)
 
+        target_column = ctk.CTkFrame(chooser, fg_color="transparent")
+        target_column.grid(row=0, column=2, sticky="nsew")
+        target_column.grid_columnconfigure(0, weight=1)
+        target_column.grid_rowconfigure(0, weight=1)
+
         self.storage_card = self._make_choice_card(
-            chooser, 2, "💾", tr("target"), tr("no_storage"), self.choose_storage
+            target_column, 0, "💾", tr("target"), tr("no_storage"), self.choose_storage
         )
 
+        actions = ctk.CTkFrame(target_column, fg_color="transparent")
+        actions.grid(row=1, column=0, pady=(14, 0), sticky="ew")
+        actions.grid_columnconfigure((0, 1), weight=1)
+
+        self.write_button = ctk.CTkButton(
+            actions,
+            text=tr("write"),
+            width=150,
+            height=40,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            state="disabled",
+            command=self.start_flash,
+        )
+        self.write_button.grid(row=0, column=0, sticky="w")
+
+        self.eject_button = ctk.CTkButton(
+            actions,
+            text=tr("eject"),
+            width=150,
+            height=40,
+            state="disabled",
+            command=self.eject_storage,
+        )
+        self.eject_button.grid(row=0, column=1, padx=(16, 0), sticky="e")
+
     def _build_image_card(self, parent, column) -> None:
-        card = ctk.CTkFrame(parent, corner_radius=10, height=360)
+        card = ctk.CTkFrame(parent, corner_radius=10, height=340)
         card.grid(row=0, column=column, sticky="nsew", ipady=6)
         card.grid_propagate(False)
         card.grid_columnconfigure(0, weight=1)
@@ -355,7 +397,7 @@ class BmapFlashApp(ctk.CTk):
         image_row.grid(row=1, column=0, columnspan=2, padx=18, pady=(0, 8), sticky="ew")
         image_row.grid_columnconfigure(0, weight=1)
         self.image_value_label = ctk.CTkLabel(
-            image_row, text=tr("no_image"), font=ctk.CTkFont(size=15, weight="bold"),
+            image_row, text=tr("no_image"), font=ctk.CTkFont(size=12, weight="bold"),
                 wraplength=200, justify="left", anchor="w",
         )
         self.image_value_label.grid(row=0, column=0, sticky="w")
@@ -386,19 +428,19 @@ class BmapFlashApp(ctk.CTk):
         bmap_buttons.grid(row=0, column=1, padx=(12, 0), sticky="e")
         ctk.CTkButton(
             bmap_buttons, text=tr("bmap_button"), width=130, height=32, command=self.choose_bmap
-        ).grid(row=0, column=0)
+        ).grid(row=0, column=0, pady=(0, 4))
         ctk.CTkButton(
-            bmap_buttons, text=tr("remove"), width=90, height=32,
+            bmap_buttons, text=tr("remove"), width=130, height=32,
             fg_color="gray40", command=self.clear_bmap
-        ).grid(row=0, column=1, padx=(8, 0))
+        ).grid(row=1, column=0)
 
         ctk.CTkCheckBox(card, text=tr("verify"), variable=self.verify_var).grid(
-            row=5, column=0, columnspan=2, padx=18, pady=(4, 0), sticky="w"
+            row=5, column=0, columnspan=2, padx=18, pady=(0, 0), sticky="w"
         )
 
     def _make_choice_card(self, parent, column, icon, title, placeholder, command):
         card = ctk.CTkFrame(parent, corner_radius=10, height=240)
-        card.grid(row=0, column=column, sticky="new", ipady=6)
+        card.grid(row=0, column=column, sticky="nsew", ipady=6)
         card.grid_propagate(False)
         card.grid_columnconfigure(0, weight=1)
         card.grid_columnconfigure(1, weight=0)
@@ -419,7 +461,7 @@ class BmapFlashApp(ctk.CTk):
         value_label = ctk.CTkLabel(
             card,
             text=placeholder,
-            font=ctk.CTkFont(size=15, weight="bold"),
+            font=ctk.CTkFont(size=12, weight="bold"),
             width=210,
             wraplength=210,
             justify="left",
@@ -452,26 +494,15 @@ class BmapFlashApp(ctk.CTk):
 
     def _build_bottom_bar(self) -> None:
         bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.grid(row=3, column=0, padx=24, pady=(2, 16), sticky="ew")
+        bottom.grid(row=3, column=0, padx=24, pady=(0, 16), sticky="ew")
         bottom.grid_columnconfigure(0, weight=1)
 
         self.progress = ctk.CTkProgressBar(bottom, height=12, corner_radius=6)
-        self.progress.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        self.progress.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(24, 4))
         self.progress.set(0)
 
         self.status_label = ctk.CTkLabel(bottom, text=tr("ready"), anchor="w", text_color=COLOR_MUTED)
-        self.status_label.grid(row=1, column=0, sticky="w")
-
-        self.write_button = ctk.CTkButton(
-            bottom,
-            text=tr("write"),
-            width=150,
-            height=40,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            state="disabled",
-            command=self.start_flash,
-        )
-        self.write_button.grid(row=0, column=1, rowspan=2, padx=(16, 0))
+        self.status_label.grid(row=3, column=0, columnspan=3, sticky="w")
 
         self.cancel_button = ctk.CTkButton(
             bottom,
@@ -482,8 +513,12 @@ class BmapFlashApp(ctk.CTk):
             hover_color=COLOR_DANGER_HOVER,
             command=self.cancel_flash,
         )
-        self.cancel_button.grid(row=0, column=2, rowspan=2, padx=(10, 0))
+        self.cancel_button.grid(row=0, column=3, rowspan=2, padx=(10, 0))
         self.cancel_button.grid_remove()
+
+        ctk.CTkLabel(
+            bottom, text=f"v{APP_VERSION}", text_color=COLOR_MUTED
+        ).grid(row=3, column=3, padx=(10, 0), pady=(0, 0), sticky="e")
 
     # ------------------------------------------------------------------
     # Image / storage selection
@@ -606,6 +641,7 @@ class BmapFlashApp(ctk.CTk):
             return
 
         self.write_button.configure(state="disabled")
+        self.eject_button.configure(state="disabled")
         self.cancel_button.grid()
         self.progress.set(0)
         self.status_label.configure(text=tr("starting"))
@@ -622,6 +658,19 @@ class BmapFlashApp(ctk.CTk):
         if self.cancel_event is not None:
             self.cancel_event.set()
             self.status_label.configure(text=tr("cancelling"))
+
+    def eject_storage(self) -> None:
+        if self.selected_drive is None:
+            return
+
+        try:
+            diskutil.eject_drive(self.selected_drive.number)
+        except (DiskError, OSError) as exc:
+            messagebox.showerror(APP_NAME, tr("eject_error", error=exc))
+            return
+
+        self.eject_button.configure(state="disabled")
+        self.status_label.configure(text=tr("eject_success"))
 
     def _flash_worker(self, image_path, bmap_path, disk_number, cancel_event) -> None:
         try:
@@ -684,6 +733,7 @@ class BmapFlashApp(ctk.CTk):
         if success:
             self.progress.set(1)
             self.status_label.configure(text=tr("success"))
+            self.eject_button.configure(state="normal")
             messagebox.showinfo(APP_NAME, tr("success_message"))
         elif cancelled:
             self.status_label.configure(text=tr("cancelled"))

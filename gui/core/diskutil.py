@@ -151,6 +151,32 @@ def list_physical_drives() -> list[DiskInfo]:
     return drives
 
 
+def eject_drive(number: int) -> None:
+    """Request safe removal of a physical drive from Windows."""
+    path = r"\\.\PhysicalDrive%d" % number
+    try:
+        handle = win32file.CreateFile(
+            path,
+            win32file.GENERIC_READ,
+            win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE,
+            None,
+            win32file.OPEN_EXISTING,
+            0,
+            None,
+        )
+    except pywintypes.error as exc:
+        raise DiskError(f"could not open PhysicalDrive{number}: {exc}") from exc
+
+    try:
+        win32file.DeviceIoControl(
+            handle, winioctlcon.IOCTL_STORAGE_EJECT_MEDIA, None, 0
+        )
+    except pywintypes.error as exc:
+        raise DiskError(f"could not eject PhysicalDrive{number}: {exc}") from exc
+    finally:
+        handle.Close()
+
+
 class VolumeLocks:
     """Locks and dismounts every volume living on a physical disk.
 
