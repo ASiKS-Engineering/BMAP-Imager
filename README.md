@@ -1,5 +1,11 @@
 # Bmap Imager
 
+Version: `1.0.0`  
+created by ASiKS-Engineering
+
+Die Projektversion folgt Semantic Versioning. Für GitHub-Releases wird das
+Tag mit führendem `v` angelegt, zum Beispiel `v1.0.0`.
+
 Bmap Imager ist ein Windows-Flashtool mit CustomTkinter-GUI. Es schreibt
 Disk-Images direkt auf physische Laufwerke und unterstützt `.bmap`-Dateien.
 Bei einer BMAP-Datei werden nur die gemappten Bereiche geschrieben. Dadurch
@@ -79,6 +85,8 @@ py -3.10 -m pip install -r gui\requirements.txt
 py -3.10 -m pip install pyinstaller
 py -3.10 -m PyInstaller --noconfirm --clean --onefile --windowed `
   --name BmapImager `
+  --add-data "VERSION;." `
+  --add-data "gui\translations.json;." `
   --paths gui `
   gui\app.py
 ```
@@ -98,6 +106,8 @@ Manifest-Datei verwendet werden:
 py -3.10 -m PyInstaller --noconfirm --clean --onefile --windowed `
   --uac-admin `
   --name BmapImager `
+  --add-data "VERSION;." `
+  --add-data "gui\translations.json;." `
   --paths gui `
   gui\app.py
 ```
