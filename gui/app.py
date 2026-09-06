@@ -22,8 +22,8 @@ from core.flasher import FlashCancelled, FlashError, FlashProgress
 
 APP_NAME = "Bmap Imager"
 APP_AUTHOR = "created by ASiKS-Engineering"
-WINDOW_SIZE = "1020x530"
-WINDOW_MIN_SIZE = (900, 480)
+WINDOW_SIZE = "820x430"
+WINDOW_MIN_SIZE = (780, 400)
 
 
 def _read_app_version() -> str:
@@ -260,9 +260,9 @@ class BmapFlashApp(ctk.CTk):
 
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
         self._build_header()
         self._build_chooser_row()
-        self._build_options_row()
         self._build_bottom_bar()
 
     def _rebuild_ui(self) -> None:
@@ -487,11 +487,11 @@ class BmapFlashApp(ctk.CTk):
 
     def _build_bottom_bar(self) -> None:
         bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.grid(row=3, column=0, padx=24, pady=(0, 16), sticky="ew")
+        bottom.grid(row=3, column=0, padx=24, pady=(0, 10), sticky="ew")
         bottom.grid_columnconfigure(0, weight=1)
 
         self.progress = ctk.CTkProgressBar(bottom, height=12, corner_radius=6)
-        self.progress.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(24, 4))
+        self.progress.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(12, 4))
         self.progress.set(0)
 
         self.status_label = ctk.CTkLabel(bottom, text=tr("ready"), anchor="w", text_color=COLOR_MUTED)
